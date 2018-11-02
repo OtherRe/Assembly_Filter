@@ -1,6 +1,7 @@
 .data
-input_dir: .asciiz "test2.bmp" 
+input_dir: .asciiz "test1.bmp" 
 output_dir: .asciiz "test_result.bmp"
+prompt: .asciiz "\n Couldnt open a file"
 
 		.align 2
 buffer: .space 200000
@@ -17,9 +18,9 @@ kernel:
 main:
 	jal open_files
 	jal read_and_save_image_info
-	jal read_image
-	jal prepare_kernel		
-	jal start_filtering
+	#jal read_image
+	#jal prepare_kernel		
+	#jal start_filtering
 
 	j exit
 	
@@ -32,7 +33,7 @@ read_and_save_image_info:
 	#$s3 -> width
 	#$s4 -> kernel adress
 	#$s5 -> output_file descriptor
-	#$v0 -> size of image	
+	#$s7 -> size of image	
 	la $s1, buffer  #header
 	
 			
@@ -40,6 +41,10 @@ read_and_save_image_info:
 	move $a0, $s0		#decsriptor
 	move $a1, $s1   	#header	
 	li   $a2, 14
+	syscall
+	
+	li $v0, 11
+	lb $a0, 0($s1)
 	syscall
 	
 	
@@ -56,6 +61,8 @@ read_and_save_image_info:
 	addu $t0, $t0, $t1
 	subiu $s7, $t0, 14 #next_info part of the file in bytes
 	
+	
+	
 	li   $v0, 14		#read next part of info
 	move $a0, $s0		#decsriptor
 	move $a1, $s1  		#other info	buffer
@@ -70,7 +77,8 @@ read_and_save_image_info:
 	
 	lw $s2, 8($s1) # height
 	lw $s3, 4($s1) # width
-	lw $v0, 20($s1) # size of an image
+	lw $s7, 20($s1) # size of an image
+
 	
 	jr $ra
 		
@@ -78,7 +86,7 @@ read_image:
 	li   $v0, 14		#read imgage
 	move $a0, $s0		#decsriptor
 	move $a1, $s1   	#buffer	
-	move $a2, $v0		#size of image
+	move $a2, $s7		#size of image
 
 	syscall
 	
@@ -120,7 +128,7 @@ open_files:
 	move $s0, $v0	#save file descriptor
 
 	bltz $s0, exit  #couldn't open a file
-
+	
 	li $v0, 13			#open file
 	la $a0, output_dir 
 	li $a1, 9
@@ -129,7 +137,6 @@ open_files:
 	move $s5, $v0	#save file descriptor
 
 	bltz $s5, exit  #couldn't open a file
-	
 	jr $ra
 	
 start_filtering:
@@ -151,14 +158,14 @@ start_filtering:
 	
 outer_loop:
 		li $t1, 0 # COLUMN
-		bgeu $t0, $t8, exit
+		bgeu $t0, $t8, save_result
 inner_loop:	
 			addiu $t1, $t1, 1 #next column
 			bgeu $t1, $t9, next_row
 			move $t2, $zero
 
 pixel_color:
-			beq $t2, 3, inner_loop
+			beq $t2, 3, inner_loop #need to caltulate pixels for all three bytes of pixel
 			li $t3, 0 #accumulator of suma ważona
 			
 			#left column
@@ -185,13 +192,27 @@ next_row:
 	addiu $t0, $t0, 1
 	
 	li $t5 , 6
-	beqz $t5, outer_loop #save next two pixels
+a:	beqz $t5, outer_loop #save next two pixels (6 bytes)
 	lbu $t6, 0($a0) 
 	sb $t6, 0($s1)
 	
 	addiu $a0, $a0, 1
 	addiu $s1, $s1, 1	
 	subiu $t5, $t5, 1
+	j a
+	
+save_row:
+
+	move $t5 , $t9
+b:	beqz $t5, return #save next two pixels (6 bytes)
+	lbu $t6, 0($a0) 
+	sb $t6, 0($s1)
+	
+	addiu $a0, $a0, 1
+	addiu $s1, $s1, 1	
+	subiu $t5, $t5, 1
+	j b
+	
 	
 save_pixel:
 	divu $t3, $t3, $s0  #calculating srednia_wazona/suma_wartosci_kernela
@@ -232,8 +253,21 @@ calculate_coef:
 						
 			jr $ra
 
+save_result:
+	li $v0, 15 	#write to file filtered image
+	move $a0, $s5
+	la $a1, output_buffer
+	move $a2, $s7
+	syscall
+	
+	move $a0, $v0
+	li $v0, 1
+	syscall
+	
+	j exit
+
 exit: 
-	move $a0, $s0	#close output file
+	move $a0, $s5	#close output file
 	li $v0, 16
 	syscall 
 	
