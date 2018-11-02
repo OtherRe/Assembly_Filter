@@ -1,13 +1,13 @@
 .data
-input_dir: .asciiz "test1.bmp" 
+input_dir: .asciiz "test2.bmp"
 output_dir: .asciiz "test_result.bmp"
-prompt: .asciiz "\n Couldnt open a file"
+prompt: .asciiz "\n Starting filtering"
 
 		.align 2
-buffer: .space 200000
+buffer: .space 2000000
 
 		.align 2
-output_buffer: .space 200000
+output_buffer: .space 2000000
 
 kernel:
 		.align 2
@@ -18,9 +18,9 @@ kernel:
 main:
 	jal open_files
 	jal read_and_save_image_info
-	#jal read_image
-	#jal prepare_kernel		
-	#jal start_filtering
+	jal read_image
+	jal prepare_kernel		
+	jal start_filtering
 
 	j exit
 	
@@ -42,12 +42,7 @@ read_and_save_image_info:
 	move $a1, $s1   	#header	
 	li   $a2, 14
 	syscall
-	
-	li $v0, 11
-	lb $a0, 0($s1)
-	syscall
-	
-	
+		
 	li $v0, 15 #write to file first part of a header
 	move $a0, $s5
 	move $a1, $s1
@@ -60,9 +55,7 @@ read_and_save_image_info:
 	lhu $t1, 10($s1)
 	addu $t0, $t0, $t1
 	subiu $s7, $t0, 14 #next_info part of the file in bytes
-	
-	
-	
+		
 	li   $v0, 14		#read next part of info
 	move $a0, $s0		#decsriptor
 	move $a1, $s1  		#other info	buffer
@@ -78,8 +71,7 @@ read_and_save_image_info:
 	lw $s2, 8($s1) # height
 	lw $s3, 4($s1) # width
 	lw $s7, 20($s1) # size of an image
-
-	
+		
 	jr $ra
 		
 read_image:
@@ -102,19 +94,35 @@ prepare_kernel:
 	
 	li $t0, 0x01010101
 	li $t1, 1
-
-	sw $t0, 0($s4)	#simple uśredniajacy filtr all 1's
-	sw $t0, 4($s4)
-	sb $t1, 8($s4)
 	
+	li $t0, 1
+	sb $t0, 0($s4)
+	li $t0, 1
+	sb $t0, 1($s4)
+	li $t0, 1
+	sb $t0, 2($s4)
+	li $t0, 1
+	sb $t0, 3($s4)
+	li $t0, 1
+	sb $t0, 4($s4)
+	li $t0, 1
+	sb $t0, 5($s4)
+	li $t0, 1
+	sb $t0, 6($s4)
+	li $t0, 1
+	sb $t0, 7($s4)
+	li $t0, 1
+	sb $t0, 8($s4)
+		
 	li $s0, 0 #sum of all kernel values accumulator
-	li $t0, 9 #counter
-	move $t1, $s4
-loop:	beqz $t0, return
+	move $t1, $s4 #kernell adress
+	
+	move $t0, $zero #counter
+loop:	beq $t0, 9  return
 		lb $t2, 0($t1)
 		addu $s0, $s0, $t2
 		addiu $t1, $t1, 1
-		subiu $t0, $t0, 1
+		addiu $t0, $t0, 1
 		j loop
 return:	jr $ra
 	
@@ -140,18 +148,23 @@ open_files:
 	jr $ra
 	
 start_filtering:
+	li $v0, 4
+	la $a0, prompt
+	syscall
 	#$s2 -> height
 	#$s3 -> width
 	#$s1 -> buffer
-	li $t0, 1 # ROW
-	li $t1, 1 # COLUMN
+	li $t0, 0 # ROW
 	li $t2, 0 # COLOR BYTE
+	
 	mulu $s6, $s3, 3 # whole row of pixels
+	addiu $s6, $s6, 1
+	
 	move $a0, $s1	 #first input pixel adress	
 	la $s1, output_buffer
 	
-	subiu $t8, $s2, 1 #for now ignoring edges
-	subiu $t9, $s3, 1	
+	addi $t8, $s2, -1 #ignoring edges
+	addi $t9, $s3, -1	
 	
 	jal save_row
 	j next_row
@@ -191,33 +204,38 @@ pixel_color:
 next_row:
 	addiu $t0, $t0, 1
 	
-	li $t5 , 6
-a:	beqz $t5, outer_loop #save next two pixels (6 bytes)
+	move $t5, $zero
+a:	beq $t5, 7, outer_loop #save next two pixels (6 bytes + 1 byte 0?)
 	lbu $t6, 0($a0) 
 	sb $t6, 0($s1)
 	
 	addiu $a0, $a0, 1
 	addiu $s1, $s1, 1	
-	subiu $t5, $t5, 1
+	addiu $t5, $t5, 1
 	j a
 	
 save_row:
 
-	move $t5 , $t9
-b:	beqz $t5, return #save next two pixels (6 bytes)
+	
+	mulu $t5, $t9, 3
+	move $t7, $zero
+b:	bgeu $t7, $t5  return #save next row of pixels
 	lbu $t6, 0($a0) 
 	sb $t6, 0($s1)
 	
 	addiu $a0, $a0, 1
 	addiu $s1, $s1, 1	
-	subiu $t5, $t5, 1
+	addiu $t7, $t7, 1
 	j b
 	
 	
 save_pixel:
-	divu $t3, $t3, $s0  #calculating srednia_wazona/suma_wartosci_kernela
-	sb $t3, 0($s1)
 	addiu $s1, $s1, 1
+	div $t3, $t3, $s0  #calculating srednia_wazona/suma_wartosci_kernela
+	sb $t3, -1($s1)
+	bgez $t3, pixel_color
+	sb $zero, -1($s1)
+	
 	
 	j pixel_color
 	
@@ -229,15 +247,15 @@ calculate_coef:
 			addu $a1, $a1, $s4	#kernel adress
 			
 			lbu $t6, 0($t5)     #value of lower pixel
-			lbu $t7, 0($a1)		#value of kernel tile
+			lb $t7, 0($a1)		#value of kernel tile
 			
 			mul $t6, $t6, $t7	#calculate cooeficient
 			add $t3, $t3, $t6	#add cooeficient into accumulator		
 			
-			addu $t5, $t5, $s6			
+			add $t5, $t5, $s6			
 			
 			lbu $t6, 0($t5)     #value of middle pixel
-			lbu $t7, 3($a1)		#value of kernel tile
+			lb $t7, 3($a1)		#value of kernel tile
 			
 			mul $t6, $t6, $t7	#calculate cooeficient
 			add $t3, $t3, $t6	#add cooeficient into accumulator
@@ -245,7 +263,7 @@ calculate_coef:
 			addu $t5, $t5, $s6
 			
 			lbu $t6, 0($t5)     #value of upper pixel
-			lbu $t7, 6($a1)		#value of kernel tile
+			lb $t7, 6($a1)		#value of kernel tile
 			
 			mul $t6, $t6, $t7	#calculate cooeficient
 			add $t3, $t3, $t6	#add cooeficient into accumulator
@@ -254,15 +272,17 @@ calculate_coef:
 			jr $ra
 
 save_result:
+	jal save_row
+
 	li $v0, 15 	#write to file filtered image
 	move $a0, $s5
 	la $a1, output_buffer
 	move $a2, $s7
 	syscall
 	
-	move $a0, $v0
-	li $v0, 1
-	syscall
+	#move $a0, $v0
+	#li $v0, 1
+	#syscall
 	
 	j exit
 
