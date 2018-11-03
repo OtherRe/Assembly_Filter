@@ -1,5 +1,5 @@
 .data
-input_dir: .asciiz "test3.bmp"
+input_dir: .asciiz "test2.bmp"
 output_dir: .asciiz "test_result.bmp"
 prompt: .asciiz "\n Starting filtering"
 
@@ -95,23 +95,23 @@ prepare_kernel:
 	li $t0, 0x01010101
 	li $t1, 1
 	
-	li $t0, 1
+    li $t0, 0
 	sb $t0, 0($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 1($s4)
-	li $t0, 1
+	li $t0, 0
 	sb $t0, 2($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 3($s4)
-	li $t0, 1
+	li $t0, 5
 	sb $t0, 4($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 5($s4)
-	li $t0, 1
+	li $t0, 0
 	sb $t0, 6($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 7($s4)
-	li $t0, 1
+	li $t0, 0
 	sb $t0, 8($s4)
 		
 	li $s0, 0 #sum of all kernel values accumulator
@@ -157,8 +157,8 @@ start_filtering:
 	li $t0, 0 # ROW
 	li $t2, 0 # COLOR BYTE
 	
-	addi $t8, $s2, -1 #ignoring edges
-	addi $t9, $s3, -1
+	addi $t8, $s2, -1 #NRows ignoring edges
+	addi $t9, $s3, -1 #NColumns ignoring edges
 	
 	li $t5, 4
 	div $s3, $t5
@@ -212,84 +212,92 @@ next_row:
 	
 	addiu $t7, $s2, 6 #two pixels plus row padding
 	move $t5, $zero
-a:	beq $t5, $t7, outer_loop #save next two pixels (6 bytes + 1 byte 0?)
-	lbu $t6, 0($a0) 
-	sb $t6, 0($s1)
+	next_row_loop:
+		beq $t5, $t7, outer_loop #save next two pixels (6 bytes + 1 byte 0?)
+		lbu $t6, 0($a0) 
+		sb $t6, 0($s1)
 	
-	addiu $a0, $a0, 1
-	addiu $s1, $s1, 1	
-	addiu $t5, $t5, 1
-	j a
+		addiu $a0, $a0, 1
+		addiu $s1, $s1, 1	
+		addiu $t5, $t5, 1
+	j next_row_loop
 	
 save_row:
 
 	
 	mulu $t5, $t9, 3
 	move $t7, $zero
-b:	bgeu $t7, $t5  return #save next row of pixels
-	lbu $t6, 0($a0) 
-	sb $t6, 0($s1)
 	
-	addiu $a0, $a0, 1
-	addiu $s1, $s1, 1	
-	addiu $t7, $t7, 1
-	j b
+	save_row_loop:	
+		bgeu $t7, $t5  return #save next row of pixels
+		lb $t6, 0($a0) 
+		sb $t6, 0($s1)
+	
+		addiu $a0, $a0, 1
+		addiu $s1, $s1, 1	
+		addiu $t7, $t7, 1
+	j save_row_loop
 	
 	
 save_pixel:
 	addiu $s1, $s1, 1
 	div $t3, $t3, $s0  #calculating srednia_wazona/suma_wartosci_kernela
-	sb $t3, -1($s1)
-	bgez $t3, pixel_color
-	sb $zero, -1($s1)
-	
-	
-	j pixel_color
+		
+	#OVERFLOW
+		ble $t3, 255, not_overflow
+		li $t3, 255
+		sb $t3, -1($s1)
+		j pixel_color
+		
+	not_overflow:
+		bgez $t3, not_negative
+		sb $zero, -1($s1)
+		j pixel_color
+		
+	not_negative:
+		sb $t3, -1($s1)
+		j pixel_color
 	
 	
 calculate_coef:
 			#calculating index of current pixel
-			addu $t5, $a0, $a2  #left or right pixel
-			subu $t5, $t5, $s6  #lower row first
-			addu $a1, $a1, $s4	#kernel adress
+	addu $t5, $a0, $a2  #left or right pixel
+	subu $t5, $t5, $s6  #lower row first
+	addu $a1, $a1, $s4	#kernel adress
 			
-			lbu $t6, 0($t5)     #value of lower pixel
-			lb $t7, 0($a1)		#value of kernel tile
+	lbu $t6, 0($t5)     #value of lower pixel
+	lb $t7, 0($a1)		#value of kernel tile
 			
-			mul $t6, $t6, $t7	#calculate cooeficient
-			add $t3, $t3, $t6	#add cooeficient into accumulator		
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator		
 			
-			add $t5, $t5, $s6			
+	add $t5, $t5, $s6			
 			
-			lbu $t6, 0($t5)     #value of middle pixel
-			lb $t7, 3($a1)		#value of kernel tile
+	lbu $t6, 0($t5)     #value of middle pixel
+	lb $t7, 3($a1)		#value of kernel tile
 			
-			mul $t6, $t6, $t7	#calculate cooeficient
-			add $t3, $t3, $t6	#add cooeficient into accumulator
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator
 			
-			addu $t5, $t5, $s6
+	addu $t5, $t5, $s6
 			
-			lbu $t6, 0($t5)     #value of upper pixel
-			lb $t7, 6($a1)		#value of kernel tile
+	lbu $t6, 0($t5)     #value of upper pixel
+	lb $t7, 6($a1)		#value of kernel tile
 			
-			mul $t6, $t6, $t7	#calculate cooeficient
-			add $t3, $t3, $t6	#add cooeficient into accumulator
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator
 
 						
-			jr $ra
+	jr $ra
 
 save_result:
 	jal save_row
 
-	li $v0, 15 	#write to file filtered image
+	li   $v0, 15 	#write to file filtered image
 	move $a0, $s5
-	la $a1, output_buffer
+	la   $a1, output_buffer
 	move $a2, $s7
 	syscall
-	
-	#move $a0, $v0
-	#li $v0, 1
-	#syscall
 	
 	j exit
 
