@@ -1,5 +1,5 @@
 .data
-input_dir: .asciiz "test5.bmp"
+input_dir: .asciiz "test3.bmp"
 output_dir: .asciiz "test_result.bmp"
 prompt: .asciiz "\n Starting filtering"
 
@@ -95,23 +95,23 @@ prepare_kernel:
 	li $t0, 0x01010101
 	li $t1, 1
 	
-	li $t0, -1
+	li $t0, 1
 	sb $t0, 0($s4)
-	li $t0, -1
+	li $t0, 1
 	sb $t0, 1($s4)
-	li $t0, -1
+	li $t0, 1
 	sb $t0, 2($s4)
-	li $t0, -1
+	li $t0, 1
 	sb $t0, 3($s4)
-	li $t0, 9
+	li $t0, 1
 	sb $t0, 4($s4)
-	li $t0, -1
+	li $t0, 1
 	sb $t0, 5($s4)
-	li $t0, -1
+	li $t0, 1
 	sb $t0, 6($s4)
-	li $t0, -1
+	li $t0, 1
 	sb $t0, 7($s4)
-	li $t0, -1
+	li $t0, 1
 	sb $t0, 8($s4)
 		
 	li $s0, 0 #sum of all kernel values accumulator
@@ -165,7 +165,7 @@ start_filtering:
 	mfhi $s2 #<---- padding for each row
 	
 	mulu $s6, $s3, 3 # whole row of pixels
-	addu $s6, $s6, $t5
+	addu $s6, $s6, $s2
 	
 	move $a0, $s1	 #first input pixel adress	
 	la $s1, output_buffer
