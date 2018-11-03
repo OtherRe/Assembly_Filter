@@ -1,5 +1,5 @@
 .data
-input_dir: .asciiz "test2.bmp"
+input_dir: .asciiz "test5.bmp"
 output_dir: .asciiz "test_result.bmp"
 prompt: .asciiz "\n Starting filtering"
 
@@ -95,23 +95,23 @@ prepare_kernel:
 	li $t0, 0x01010101
 	li $t1, 1
 	
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 0($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 1($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 2($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 3($s4)
-	li $t0, 1
+	li $t0, 9
 	sb $t0, 4($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 5($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 6($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 7($s4)
-	li $t0, 1
+	li $t0, -1
 	sb $t0, 8($s4)
 		
 	li $s0, 0 #sum of all kernel values accumulator
@@ -157,14 +157,20 @@ start_filtering:
 	li $t0, 0 # ROW
 	li $t2, 0 # COLOR BYTE
 	
+	addi $t8, $s2, -1 #ignoring edges
+	addi $t9, $s3, -1
+	
+	li $t5, 4
+	div $s3, $t5
+	mfhi $s2 #<---- padding for each row
+	
 	mulu $s6, $s3, 3 # whole row of pixels
-	addiu $s6, $s6, 1
+	addu $s6, $s6, $t5
 	
 	move $a0, $s1	 #first input pixel adress	
 	la $s1, output_buffer
 	
-	addi $t8, $s2, -1 #ignoring edges
-	addi $t9, $s3, -1	
+	
 	
 	jal save_row
 	j next_row
@@ -204,8 +210,9 @@ pixel_color:
 next_row:
 	addiu $t0, $t0, 1
 	
+	addiu $t7, $s2, 6 #two pixels plus row padding
 	move $t5, $zero
-a:	beq $t5, 7, outer_loop #save next two pixels (6 bytes + 1 byte 0?)
+a:	beq $t5, $t7, outer_loop #save next two pixels (6 bytes + 1 byte 0?)
 	lbu $t6, 0($a0) 
 	sb $t6, 0($s1)
 	
