@@ -16,15 +16,27 @@ kernel:
 
 .text
 main:
-	jal open_files
-	jal read_and_save_image_info
-	jal read_image
-	jal prepare_kernel		
-	jal start_filtering
+#	j open_files
+	
+open_files:
 
-	j exit
+	li $v0, 13		  #open file
+	la $a0, input_dir 
+	li $a1, 0
+	syscall
+
+	move $s0, $v0	#save file descriptor
+
+	bltz $s0, exit  #couldn't open a file
 	
-	
+	li $v0, 13			#open file
+	la $a0, output_dir 
+	li $a1, 9
+	syscall
+
+	move $s5, $v0	#save file descriptor
+
+	bltz $s5, exit  #couldn't open a file	
 
 read_and_save_image_info:
 	#$s0 -> input_image descriptor/ changes later to sum of values of kernel
@@ -71,8 +83,7 @@ read_and_save_image_info:
 	lw $s2, 8($s1) # height
 	lw $s3, 4($s1) # width
 	lw $s7, 20($s1) # size of an image
-		
-	jr $ra
+
 		
 read_image:
 	li   $v0, 14		#read imgage
@@ -85,9 +96,6 @@ read_image:
 	move $a0, $s0	    #close input file
 	li $v0, 16
 	syscall
-
-	jr $ra
-	
 
 prepare_kernel:
 	la $s4, kernel
@@ -118,34 +126,14 @@ prepare_kernel:
 	move $t1, $s4 #kernell adress
 	
 	move $t0, $zero #counter
-loop:	beq $t0, 9  return
+loop:	beq $t0, 9  start_filtering
 		lb $t2, 0($t1)
 		addu $s0, $s0, $t2
 		addiu $t1, $t1, 1
 		addiu $t0, $t0, 1
 		j loop
-return:	jr $ra
 	
-open_files:
 
-	li $v0, 13		  #open file
-	la $a0, input_dir 
-	li $a1, 0
-	syscall
-
-	move $s0, $v0	#save file descriptor
-
-	bltz $s0, exit  #couldn't open a file
-	
-	li $v0, 13			#open file
-	la $a0, output_dir 
-	li $a1, 9
-	syscall
-
-	move $s5, $v0	#save file descriptor
-
-	bltz $s5, exit  #couldn't open a file
-	jr $ra
 	
 start_filtering:
 	li $v0, 4
@@ -186,6 +174,8 @@ inner_loop:
 pixel_color:
 			beq $t2, 3, inner_loop #need to caltulate pixels for all three bytes of pixel
 			li $t3, 0 #accumulator of suma ważona
+			
+			
 			
 			#left column
 			li $a1, 0	#kernel tile
@@ -238,7 +228,8 @@ save_row:
 		addiu $t7, $t7, 1
 	j save_row_loop
 	
-	
+return: jr $ra
+
 save_pixel:
 	addiu $s1, $s1, 1
 	div $t3, $t3, $s0  #calculating srednia_wazona/suma_wartosci_kernela
