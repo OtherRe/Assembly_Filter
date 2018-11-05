@@ -2,6 +2,7 @@
 input_dir: .asciiz "test2.bmp"
 output_dir: .asciiz "test_result.bmp"
 prompt: .asciiz "\n Starting filtering"
+prompt_end: .asciiz "\n End filtering\n"
 
 		.align 2
 buffer: .space 2000000
@@ -100,9 +101,6 @@ read_image:
 prepare_kernel:
 	la $s4, kernel
 	
-	li $t0, 0x01010101
-	li $t1, 1
-	
     li $t0, 0
 	sb $t0, 0($s4)
 	li $t0, -1
@@ -121,6 +119,7 @@ prepare_kernel:
 	sb $t0, 7($s4)
 	li $t0, 0
 	sb $t0, 8($s4)
+
 		
 	li $s0, 0 #sum of all kernel values accumulator
 	move $t1, $s4 #kernell adress
@@ -171,65 +170,46 @@ inner_loop:
 			bgeu $t1, $t9, next_row
 			move $t2, $zero
 
-pixel_color:
+	pixel_color:
 			beq $t2, 3, inner_loop #need to caltulate pixels for all three bytes of pixel
 			li $t3, 0 #accumulator of suma ważona
 			
+			la $t4, 0($s4)	#kernel tile
+			move $t5, $a0   #current byte
 			
+			subiu $t5, $t5, 3	#starting with left column
+			subu  $t5, $t5, $s6 #and bottom row
 			
-			#left column
-			li $a1, 0	#kernel tile
-			li $a2, -3  #left column
-			jal calculate_coef
+			#setting up loop counters
+			li $a1, 3 #column counter
+			li $a2, 3 #row counter
+		
+		
+		pixels_row:
+			lbu $t6, 0($t5)     #value of color of the pixel
+			lb $t7, 0($t4)		#value of kernel tile
+			
+			mul $t6, $t6, $t7	#calculate cooeficient
+			add $t3, $t3, $t6	#add cooeficient into accumulator
+			
+			addiu $t4, $t4, 1
+			addiu $t5, $t5, 3 #next pixel
+			
+			subiu $a1, $a1, 1
+			bgtz $a1, pixels_row
+		pixels_column:
+			subiu $t5, $t5, 9 # returning to first column
+			addu $t5, $t5, $s6	#going up a row
+			
+			subiu $a2, $a2, 1
+			li $a1, 3
+			
+			bgtz $a2, pixels_row
+			
+		addiu $t2, $t2, 1 #next color byte
+		addiu $a0, $a0, 1 #next byte in image
 
-			#middle column
-			li $a1, 1	#kernel tile
-			li $a2, 0  #middle column
-			jal calculate_coef
 			
-			#right column
-			li $a1, 2	#kernel tile
-			li $a2, 3  #right column
-			jal calculate_coef
-			
-			
-			addiu $t2, $t2, 1 #next color byte
-			addiu $a0, $a0, 1 #next byte in image
-			j save_pixel
-
-next_row:
-	addiu $t0, $t0, 1
-	
-	addiu $t7, $s2, 6 #two pixels plus row padding
-	move $t5, $zero
-	next_row_loop:
-		beq $t5, $t7, outer_loop #save next two pixels (6 bytes + 1 byte 0?)
-		lbu $t6, 0($a0) 
-		sb $t6, 0($s1)
-	
-		addiu $a0, $a0, 1
-		addiu $s1, $s1, 1	
-		addiu $t5, $t5, 1
-	j next_row_loop
-	
-save_row:
-
-	
-	mulu $t5, $t9, 3
-	move $t7, $zero
-	
-	save_row_loop:	
-		bgeu $t7, $t5  return #save next row of pixels
-		lb $t6, 0($a0) 
-		sb $t6, 0($s1)
-	
-		addiu $a0, $a0, 1
-		addiu $s1, $s1, 1	
-		addiu $t7, $t7, 1
-	j save_row_loop
-	
-return: jr $ra
-
 save_pixel:
 	addiu $s1, $s1, 1
 	div $t3, $t3, $s0  #calculating srednia_wazona/suma_wartosci_kernela
@@ -249,37 +229,38 @@ save_pixel:
 		sb $t3, -1($s1)
 		j pixel_color
 	
-	
-calculate_coef:
-			#calculating index of current pixel
-	addu $t5, $a0, $a2  #left or right pixel
-	subu $t5, $t5, $s6  #lower row first
-	addu $a1, $a1, $s4	#kernel adress
-			
-	lbu $t6, 0($t5)     #value of lower pixel
-	lb $t7, 0($a1)		#value of kernel tile
-			
-	mul $t6, $t6, $t7	#calculate cooeficient
-	add $t3, $t3, $t6	#add cooeficient into accumulator		
-			
-	add $t5, $t5, $s6			
-			
-	lbu $t6, 0($t5)     #value of middle pixel
-	lb $t7, 3($a1)		#value of kernel tile
-			
-	mul $t6, $t6, $t7	#calculate cooeficient
-	add $t3, $t3, $t6	#add cooeficient into accumulator
-			
-	addu $t5, $t5, $s6
-			
-	lbu $t6, 0($t5)     #value of upper pixel
-	lb $t7, 6($a1)		#value of kernel tile
-			
-	mul $t6, $t6, $t7	#calculate cooeficient
-	add $t3, $t3, $t6	#add cooeficient into accumulator
 
-						
-	jr $ra
+next_row:
+	addiu $t0, $t0, 1
+	
+	addiu $t7, $s2, 6 #two pixels plus row padding
+	move $t5, $zero
+	next_row_loop:
+		beq $t5, $t7, outer_loop #save next two pixels (6 bytes + 1 byte 0?)
+		lbu $t6, 0($a0) 
+		sb $t6, 0($s1)
+	
+		addiu $a0, $a0, 1
+		addiu $s1, $s1, 1	
+		addiu $t5, $t5, 1
+	j next_row_loop
+	
+save_row:
+	mulu $t5, $t9, 3
+	move $t7, $zero
+	
+	save_row_loop:	
+		bgeu $t7, $t5  return #save next row of pixels
+		lb $t6, 0($a0) 
+		sb $t6, 0($s1)
+	
+		addiu $a0, $a0, 1
+		addiu $s1, $s1, 1	
+		addiu $t7, $t7, 1
+	j save_row_loop
+	
+return: jr $ra
+
 
 save_result:
 	jal save_row
