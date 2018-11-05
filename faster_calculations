@@ -1,0 +1,96 @@
+pixel_color:
+			beq $t2, 3, inner_loop #need to caltulate pixels for all three bytes of pixel
+			li $t3, 0 #accumulator of suma ważona
+			
+			#left column
+			li $a1, 0	#kernel tile
+			li $a2, -3  #left column
+			addu $t5, $a0, $a2  #left or right pixel
+	subu $t5, $t5, $s6  #lower row first
+	addu $a1, $a1, $s4	#kernel adress
+			
+	lbu $t6, 0($t5)     #value of lower pixel
+	lb $t7, 0($a1)		#value of kernel tile
+			
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator		
+			
+	add $t5, $t5, $s6			
+			
+	lbu $t6, 0($t5)     #value of middle pixel
+	lb $t7, 3($a1)		#value of kernel tile
+			
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator
+			
+	addu $t5, $t5, $s6
+			
+	lbu $t6, 0($t5)     #value of upper pixel
+	lb $t7, 6($a1)		#value of kernel tile
+			
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator
+
+			#middle column
+			li $a1, 1	#kernel tile
+			li $a2, 0  #middle column
+			addu $t5, $a0, $a2  #left or right pixel
+	subu $t5, $t5, $s6  #lower row first
+	addu $a1, $a1, $s4	#kernel adress
+			
+	lbu $t6, 0($t5)     #value of lower pixel
+	lb $t7, 0($a1)		#value of kernel tile
+			
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator		
+			
+	add $t5, $t5, $s6			
+			
+	lbu $t6, 0($t5)     #value of middle pixel
+	lb $t7, 3($a1)		#value of kernel tile
+			
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator
+			
+	addu $t5, $t5, $s6
+			
+	lbu $t6, 0($t5)     #value of upper pixel
+	lb $t7, 6($a1)		#value of kernel tile
+			
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator
+			
+			#right column
+			li $a1, 2	#kernel tile
+			li $a2, 3  #right column
+			addu $t5, $a0, $a2  #left or right pixel
+	subu $t5, $t5, $s6  #lower row first
+	addu $a1, $a1, $s4	#kernel adress
+			
+	lbu $t6, 0($t5)     #value of lower pixel
+	lb $t7, 0($a1)		#value of kernel tile
+			
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator		
+			
+	add $t5, $t5, $s6			
+			
+	lbu $t6, 0($t5)     #value of middle pixel
+	lb $t7, 3($a1)		#value of kernel tile
+			
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator
+			
+	addu $t5, $t5, $s6
+			
+	lbu $t6, 0($t5)     #value of upper pixel
+	lb $t7, 6($a1)		#value of kernel tile
+			
+	mul $t6, $t6, $t7	#calculate cooeficient
+	add $t3, $t3, $t6	#add cooeficient into accumulator
+			
+			
+			addiu $t2, $t2, 1 #next color byte
+			addiu $a0, $a0, 1 #next byte in image
+			j save_pixel
+
