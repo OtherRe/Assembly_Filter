@@ -36,6 +36,10 @@ open_files:
 	syscall
 
 	move $s5, $v0	#save file descriptor
+	
+	subiu $sp, $sp, 20
+	sw $s0, 0($sp)
+	sw $s5, 4($sp)
 
 	bltz $s5, exit  #couldn't open a file	
 
@@ -85,18 +89,7 @@ read_and_save_image_info:
 	lw $s3, 4($s1) # width
 	lw $s7, 20($s1) # size of an image
 
-		
-read_image:
-	li   $v0, 14		#read imgage
-	move $a0, $s0		#decsriptor
-	move $a1, $s1   	#buffer	
-	move $a2, $s7		#size of image
 
-	syscall
-	
-	move $a0, $s0	    #close input file
-	li $v0, 16
-	syscall
 
 prepare_kernel:
 	la $s4, kernel
@@ -125,14 +118,25 @@ prepare_kernel:
 	move $t1, $s4 #kernell adress
 	
 	move $t0, $zero #counter
-loop:	beq $t0, 9  start_filtering
+loop:	beq $t0, 9  read_image
 		lb $t2, 0($t1)
 		addu $s0, $s0, $t2
 		addiu $t1, $t1, 1
 		addiu $t0, $t0, 1
 		j loop
 	
+		
+read_image:
+	li   $v0, 14		#read imgage
+	lw   $a0, 0($sp)		#decsriptor
+	move $a1, $s1   	#buffer	
+	move $a2, $s7		#size of image
 
+	syscall
+	
+	#close input file
+	li $v0, 16
+	syscall
 	
 start_filtering:
 	li $v0, 4
