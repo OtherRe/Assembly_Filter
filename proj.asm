@@ -86,10 +86,11 @@ read_and_save_image_info:
 	syscall
 	
 	lw $s2, 8($s1) # height
+	sw $s2, 8($sp)
 	lw $s3, 4($s1) # width
+	sw $s3, 12($sp)
 	lw $s7, 20($s1) # size of an image
-
-
+	sw $s7, 16($sp)
 
 prepare_kernel:
 	la $s4, kernel
@@ -118,51 +119,68 @@ prepare_kernel:
 	move $t1, $s4 #kernell adress
 	
 	move $t0, $zero #counter
-loop:	beq $t0, 9  read_image
+loop:	
 		lb $t2, 0($t1)
 		addu $s0, $s0, $t2
 		addiu $t1, $t1, 1
 		addiu $t0, $t0, 1
-		j loop
+		blt   $t0, 9  loop
 	
+	
+#################################################
+#READING IMAGE
+#################################################
+
 		
 read_image:
 	li   $v0, 14		#read imgage
-	lw   $a0, 0($sp)		#decsriptor
-	move $a1, $s1   	#buffer	
-	move $a2, $s7		#size of image
+	lw   $a0, 0($sp)	#decsriptor
+	la   $a1, buffer  	#buffer	
+	lw   $a2, 16($sp)	#size of image
 
 	syscall
 	
-	#close input file
+	#close input file when block reading can't do this
 	li $v0, 16
 	syscall
 	
-start_filtering:
+prepare_filter:
 	li $v0, 4
 	la $a0, prompt
 	syscall
-	#$s2 -> height
-	#$s3 -> width
-	#$s1 -> buffer
+
+	
 	li $t0, 0 # ROW
+	li $t1, 0 # COLUMN
 	li $t2, 0 # COLOR BYTE
 	
-	addi $t8, $s2, -1 #NRows ignoring edges
-	addi $t9, $s3, -1 #NColumns ignoring edges
+	lw $t8, 8($sp) #rows
+	lw $t9, 12($sp)#columns
 	
 	li $t5, 4
-	div $s3, $t5
-	mfhi $s2 #<---- padding for each row
+	div $t8, $t5
+	mfhi $s3 #<---- padding for each row
+			
+	mulu $s4, $t8, 3 # whole row of pixels
+	addu $s4, $s4, $s3
 	
-	mulu $s6, $s3, 3 # whole row of pixels
-	addu $s6, $s6, $s2
+	addi $t8, $t8, -1 #NRows ignoring edges
+	addi $t9, $t9, -1 #NColumns ignoring edges
 	
-	move $a0, $s1	 #first input pixel adress	
 	la $s1, output_buffer
+	la $s2, buffer	 #first input pixel adress	
 	
+	#$t0 -> row
+	#$t1 -> column
+	#$t2 -> color byte
 	
-	
+	#s0 -> kernel sum
+	#s1 -> output pointer
+	#s2 -> input pointer
+	#s3 -> padding for each row
+	#s4 -> whole row in bytes
+
+start_filtering:
 	jal save_row
 	j next_row
 	
@@ -178,11 +196,11 @@ inner_loop:
 			beq $t2, 3, inner_loop #need to caltulate pixels for all three bytes of pixel
 			li $t3, 0 #accumulator of suma ważona
 			
-			la $t4, 0($s4)	#kernel tile
-			move $t5, $a0   #current byte
+			la $t4,	  kernel  #kernel tile
+			move $t5, $s2     #current byte
 			
 			subiu $t5, $t5, 3	#starting with left column
-			subu  $t5, $t5, $s6 #and bottom row
+			subu  $t5, $t5, $s4 #and bottom row
 			
 			#setting up loop counters
 			li $a1, 3 #column counter
@@ -203,7 +221,7 @@ inner_loop:
 			bgtz $a1, pixels_row
 		pixels_column:
 			subiu $t5, $t5, 9 # returning to first column
-			addu $t5, $t5, $s6	#going up a row
+			addu $t5, $t5, $s4	#going up a row
 			
 			subiu $a2, $a2, 1
 			li $a1, 3
@@ -211,7 +229,7 @@ inner_loop:
 			bgtz $a2, pixels_row
 			
 		addiu $t2, $t2, 1 #next color byte
-		addiu $a0, $a0, 1 #next byte in image
+		addiu $s2, $s2, 1 #next byte in image
 
 			
 save_pixel:
@@ -237,14 +255,14 @@ save_pixel:
 next_row:
 	addiu $t0, $t0, 1
 	
-	addiu $t7, $s2, 6 #two pixels plus row padding
+	addiu $t7, $s3, 6 #two pixels plus row padding
 	move $t5, $zero
 	next_row_loop:
 		beq $t5, $t7, outer_loop #save next two pixels (6 bytes + 1 byte 0?)
-		lbu $t6, 0($a0) 
+		lbu $t6, 0($s2) 
 		sb $t6, 0($s1)
 	
-		addiu $a0, $a0, 1
+		addiu $s2, $s2, 1
 		addiu $s1, $s1, 1	
 		addiu $t5, $t5, 1
 	j next_row_loop
@@ -255,10 +273,10 @@ save_row:
 	
 	save_row_loop:	
 		bgeu $t7, $t5  return #save next row of pixels
-		lb $t6, 0($a0) 
+		lb $t6, 0($s2) 
 		sb $t6, 0($s1)
 	
-		addiu $a0, $a0, 1
+		addiu $s2, $s2, 1
 		addiu $s1, $s1, 1	
 		addiu $t7, $t7, 1
 	j save_row_loop
@@ -270,15 +288,15 @@ save_result:
 	jal save_row
 
 	li   $v0, 15 	#write to file filtered image
-	move $a0, $s5
+	lw   $a0, 4($sp)
 	la   $a1, output_buffer
-	move $a2, $s7
+	lw   $a2, 16($sp)
 	syscall
 	
 	j exit
 
 exit: 
-	move $a0, $s5	#close output file
+	lw $a0, 4($sp)	#close output file
 	li $v0, 16
 	syscall 
 	
