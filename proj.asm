@@ -165,7 +165,8 @@ prepare_filter:
 	li $s6, 0 # COLUMN counter
 	
 	addi $t8, $t8, -1 #NRows ignoring edges
-	addi $t9, $t9, -1 #NColumns ignoring edges
+	addi $t9, $t9, -2 #NColumns ignoring edges
+	mulu $t9, $t9, 3
 
 	#$t0 -> color byte(R or B or G)
 	
@@ -187,11 +188,9 @@ outer_loop:
 		bgeu $s5, $t8, save_result
 inner_loop:	
 			addiu $s6, $s6, 1 #next column
-			bgeu $s6, $t9, next_row
-			move $t0, $zero
+			bgtu $s6, $t9, next_row
+			#move $t0, $zero
 
-	next_pixel_color:
-			beq $t0, 3, inner_loop #need to caltulate pixels for all three bytes of pixel
 			li $t3, 0 #accumulator of suma ważona
 			
 			la $t4,	  kernel  #kernel tile
@@ -226,7 +225,6 @@ inner_loop:
 			
 			bgtz $a2, pixels_row
 			
-		addiu $t0, $t0, 1 #next color byte
 		addiu $s2, $s2, 1 #next byte in image
 
 			
@@ -238,19 +236,26 @@ save_pixel:
 		ble $t3, 255, not_overflow
 		li $t3, 255
 		sb $t3, -1($s1)
-		j next_pixel_color
+		j inner_loop
 		
 	not_overflow:
 		bgez $t3, not_negative
 		sb $zero, -1($s1)
-		j next_pixel_color
+		j inner_loop
 		
 	not_negative:
 		sb $t3, -1($s1)
-		j next_pixel_color
+		j inner_loop
 	
 
 next_row:
+	#li $v0, 32
+	#li $a0, 1000
+#	syscall
+#	lw $t0
+#	30*3 = 90 + 2 = 92 / 4 
+#	30*4 = 120
+	
 	addiu $s5, $s5, 1
 	
 	addiu $t7, $s3, 6 #two pixels plus row padding
@@ -266,7 +271,7 @@ next_row:
 	j next_row_loop
 	
 save_row:
-	mulu $t5, $t9, 3
+	addiu $t5, $t9, 3
 	move $t7, $zero
 	
 	save_row_loop:	
