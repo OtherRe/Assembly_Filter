@@ -155,10 +155,10 @@ prepare_filter:
 	lw $t8, 8($sp) #rows
 	lw $t9, 12($sp)#columns
 	
-	div $t0, $t8, 4
+	div $t0, $t9, 4
 	mfhi $s3 #<---- padding for each row
 			
-	mulu $s4, $t8, 3 # whole row of pixels in bytes
+	mulu $s4, $t9, 3 # whole row of pixels in bytes
 	addu $s4, $s4, $s3 #plus padding
 		
 	li $s5, 0 # ROW counter
@@ -190,7 +190,7 @@ inner_loop:
 			bgeu $s6, $t9, next_row
 			move $t0, $zero
 
-	pixel_color:
+	next_pixel_color:
 			beq $t0, 3, inner_loop #need to caltulate pixels for all three bytes of pixel
 			li $t3, 0 #accumulator of suma ważona
 			
@@ -238,16 +238,16 @@ save_pixel:
 		ble $t3, 255, not_overflow
 		li $t3, 255
 		sb $t3, -1($s1)
-		j pixel_color
+		j next_pixel_color
 		
 	not_overflow:
 		bgez $t3, not_negative
 		sb $zero, -1($s1)
-		j pixel_color
+		j next_pixel_color
 		
 	not_negative:
 		sb $t3, -1($s1)
-		j pixel_color
+		j next_pixel_color
 	
 
 next_row:
