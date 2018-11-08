@@ -149,26 +149,25 @@ prepare_filter:
 	la $a0, prompt
 	syscall
 
-	
-	li $t0, 0 # ROW
-	li $t1, 0 # COLUMN
-	li $t2, 0 # COLOR BYTE
+	la $s1, output_buffer
+	la $s2, buffer
 	
 	lw $t8, 8($sp) #rows
 	lw $t9, 12($sp)#columns
 	
-	li $t5, 4
-	div $t8, $t5
+	div $t0, $t8, 4
 	mfhi $s3 #<---- padding for each row
 			
-	mulu $s4, $t8, 3 # whole row of pixels
-	addu $s4, $s4, $s3
+	mulu $s4, $t8, 3 # whole row of pixels in bytes
+	addu $s4, $s4, $s3 #plus padding
+		
+	li $t0, 0 # ROW counter
+	li $t1, 0 # COLUMN counter
+	li $t2, 0 # COLOR BYTE counter
 	
 	addi $t8, $t8, -1 #NRows ignoring edges
 	addi $t9, $t9, -1 #NColumns ignoring edges
-	
-	la $s1, output_buffer
-	la $s2, buffer	 #first input pixel adress	
+
 	
 	#$t0 -> row
 	#$t1 -> column
