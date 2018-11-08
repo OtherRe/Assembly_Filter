@@ -161,38 +161,37 @@ prepare_filter:
 	mulu $s4, $t8, 3 # whole row of pixels in bytes
 	addu $s4, $s4, $s3 #plus padding
 		
-	li $t0, 0 # ROW counter
-	li $t1, 0 # COLUMN counter
-	li $t2, 0 # COLOR BYTE counter
+	li $s5, 0 # ROW counter
+	li $s6, 0 # COLUMN counter
 	
 	addi $t8, $t8, -1 #NRows ignoring edges
 	addi $t9, $t9, -1 #NColumns ignoring edges
 
-	
-	#$t0 -> row
-	#$t1 -> column
-	#$t2 -> color byte
+	#$t0 -> color byte(R or B or G)
 	
 	#s0 -> kernel sum
 	#s1 -> output pointer
 	#s2 -> input pointer
 	#s3 -> padding for each row
 	#s4 -> whole row in bytes
+	#s5 -> row counter
+	#s6 -> column counter
+
 
 start_filtering:
 	jal save_row
 	j next_row
 	
 outer_loop:
-		li $t1, 0 # COLUMN
-		bgeu $t0, $t8, save_result
+		li $s6, 0 # COLUMN
+		bgeu $s5, $t8, save_result
 inner_loop:	
-			addiu $t1, $t1, 1 #next column
-			bgeu $t1, $t9, next_row
-			move $t2, $zero
+			addiu $s6, $s6, 1 #next column
+			bgeu $s6, $t9, next_row
+			move $t0, $zero
 
 	pixel_color:
-			beq $t2, 3, inner_loop #need to caltulate pixels for all three bytes of pixel
+			beq $t0, 3, inner_loop #need to caltulate pixels for all three bytes of pixel
 			li $t3, 0 #accumulator of suma ważona
 			
 			la $t4,	  kernel  #kernel tile
@@ -227,7 +226,7 @@ inner_loop:
 			
 			bgtz $a2, pixels_row
 			
-		addiu $t2, $t2, 1 #next color byte
+		addiu $t0, $t0, 1 #next color byte
 		addiu $s2, $s2, 1 #next byte in image
 
 			
@@ -252,7 +251,7 @@ save_pixel:
 	
 
 next_row:
-	addiu $t0, $t0, 1
+	addiu $s5, $s5, 1
 	
 	addiu $t7, $s3, 6 #two pixels plus row padding
 	move $t5, $zero
