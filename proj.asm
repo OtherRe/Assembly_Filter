@@ -1,5 +1,5 @@
 .data
-input_dir: .asciiz "test2.bmp"
+input_dir: .asciiz "test6.bmp"
 output_dir: .asciiz "test_result.bmp"
 prompt: .asciiz "\n Starting filtering"
 prompt_end: .asciiz "\n End filtering\n"
@@ -131,12 +131,16 @@ loop:
 #READING IMAGE
 #################################################
 
+
+
+	
+
 		
-read_image:
+read_block:
 	li   $v0, 14		#read imgage
 	lw   $a0, 0($sp)	#decsriptor
 	la   $a1, buffer  	#buffer	
-	lw   $a2, 16($sp)	#size of image
+	lw   $a2, 16($sp)	#size of a block
 
 	syscall
 	
@@ -180,16 +184,29 @@ prepare_filter:
 
 
 start_filtering:
+#load_first_row:
+    move $a2, $s2 #saving whole first row
+    move $a1, $s1 
 	jal save_row
-	j next_row
+	addu $s2, $s2, $s4 #moving pointers
+	addiu $s2, $s2, 3
+	addu $s1, $s1, $s4 #forward
+	addiu $s1, $s1, 3
+	li 	  $s5, 1
 	
-outer_loop:
-		li $s6, 0 # COLUMN
-		bgeu $s5, $t8, save_result
-inner_loop:	
-			addiu $s6, $s6, 1 #next column
+	lbu $t6, -3($s2) 
+	sb $t6, -3($s1)
+	lbu $t6, -2($s2) 
+	sb $t6, -2($s1)
+	lbu $t6, -1($s2) 
+	sb $t6, -1($s1)
+	
+next_image_row:
+		li $s6, 0 # reseting byte counter
+		bgeu $s5, $t8, save_result #checking if all rows are done
+next_image_color:	
+			addiu $s6, $s6, 1 #next byte
 			bgtu $s6, $t9, next_row
-			#move $t0, $zero
 
 			li $t3, 0 #accumulator of suma ważona
 			
@@ -204,7 +221,7 @@ inner_loop:
 			li $a2, 3 #row counter
 		
 		
-		pixels_row:
+		next_kernel_row:
 			lbu $t6, 0($t5)     #value of color of the pixel
 			lb $t7, 0($t4)		#value of kernel tile
 			
@@ -215,20 +232,20 @@ inner_loop:
 			addiu $t5, $t5, 3 #next pixel
 			
 			subiu $a1, $a1, 1
-			bgtz $a1, pixels_row
-		pixels_column:
+			bgtz $a1, next_kernel_row
+		next_kernel_column:
 			subiu $t5, $t5, 9 # returning to first column
 			addu $t5, $t5, $s4	#going up a row
 			
 			subiu $a2, $a2, 1
 			li $a1, 3
 			
-			bgtz $a2, pixels_row
+			bgtz $a2, next_kernel_row
 			
 		addiu $s2, $s2, 1 #next byte in image
 
 			
-save_pixel:
+save_color:
 	addiu $s1, $s1, 1
 	div $t3, $t3, $s0  #calculating srednia_wazona/suma_wartosci_kernela
 		
@@ -236,32 +253,30 @@ save_pixel:
 		ble $t3, 255, not_overflow
 		li $t3, 255
 		sb $t3, -1($s1)
-		j inner_loop
+		j next_image_color
 		
 	not_overflow:
 		bgez $t3, not_negative
 		sb $zero, -1($s1)
-		j inner_loop
+		j next_image_color
 		
 	not_negative:
 		sb $t3, -1($s1)
-		j inner_loop
+		j next_image_color
 	
 
 next_row:
 	#li $v0, 32
 	#li $a0, 1000
 #	syscall
-#	lw $t0
-#	30*3 = 90 + 2 = 92 / 4 
-#	30*4 = 120
+
 	
 	addiu $s5, $s5, 1
 	
 	addiu $t7, $s3, 6 #two pixels plus row padding
 	move $t5, $zero
 	next_row_loop:
-		beq $t5, $t7, outer_loop #save next two pixels (6 bytes + 1 byte 0?)
+		beq $t5, $t7, next_image_row #save next two pixels (6 bytes + 1 byte 0?)
 		lbu $t6, 0($s2) 
 		sb $t6, 0($s1)
 	
@@ -270,24 +285,29 @@ next_row:
 		addiu $t5, $t5, 1
 	j next_row_loop
 	
-save_row:
-	addiu $t5, $t9, 3
+save_row: #arguments $a0 - source buffer adress, $a1, destination buffer adress
+	li $v0, 32
+	li $a0, 1000
+	syscall
+	
+	srl $t0, $s4, 2 #words in row
 	move $t7, $zero
 	
 	save_row_loop:	
-		bgeu $t7, $t5  return #save next row of pixels
-		lb $t6, 0($s2) 
-		sb $t6, 0($s1)
+		lw $t6, 0($a2)#CHANGEEEE 
+		sw $t6, 0($a1)
 	
-		addiu $s2, $s2, 1
-		addiu $s1, $s1, 1	
+		addiu $a2, $a2, 4
+		addiu $a1, $a1, 4	
 		addiu $t7, $t7, 1
-	j save_row_loop
+	bltu $t7, $t0, save_row_loop
 	
 return: jr $ra
 
 
 save_result:
+	subiu $a2, $s2, 3 #change to a0 !!!!
+	subiu $a1, $s1, 3
 	jal save_row
 
 	li   $v0, 15 	#write to file filtered image
