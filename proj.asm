@@ -1,14 +1,14 @@
 .data
-input_dir: .asciiz "test6.bmp"
+input_dir: .asciiz "test5.bmp"
 output_dir: .asciiz "test_result.bmp"
 prompt: .asciiz "\n Starting filtering"
 prompt_end: .asciiz "\n End filtering\n"
 
 		.align 2
-buffer: .space 2000000
+buffer: .space 20000
 
 		.align 2
-output_buffer: .space 2000000
+output_buffer: .space 20000
 
 kernel:
 		.align 2
@@ -37,7 +37,7 @@ open_files:
 
 	move $s5, $v0	#save file descriptor
 	
-	subiu $sp, $sp, 20
+	subiu $sp, $sp, 24
 	sw $s0, 0($sp)
 	sw $s5, 4($sp)
 
@@ -131,22 +131,23 @@ loop:
 #READING IMAGE
 #################################################
 
-
-
+prepare_block_info:
+	li $t0, 100 # max block size
 	
-
-		
-read_block:
-	li   $v0, 14		#read imgage
-	lw   $a0, 0($sp)	#decsriptor
-	la   $a1, buffer  	#buffer	
-	lw   $a2, 16($sp)	#size of a block
-
-	syscall
+	lw $t1, 12($sp) #width
+	addiu $t1, $t1, 1 #some more room for padding
+	mulu $t1, $t1, 3 #width in bytes
+	divu $t0, $t1
 	
-	#close input file when block reading can't do this
-	li $v0, 16
-	syscall
+	mflo $t2 # max rows per block
+	
+	lw $t1, 8($sp) #rows
+	divu $t1, $t2
+	mfhi $t3 #remainder of rows
+	sw $t3, 20($sp)
+	
+	mflo $s7 #number of blocks
+
 	
 prepare_filter:
 	li $v0, 4
@@ -171,8 +172,10 @@ prepare_filter:
 	addi $t8, $t8, -1 #NRows ignoring edges
 	addi $t9, $t9, -2 #NColumns ignoring edges
 	mulu $t9, $t9, 3
-
-	#$t0 -> color byte(R or B or G)
+	
+	li $t1, 0
+	#t1 -> current block counter
+	#t2 -> rows per block
 	
 	#s0 -> kernel sum
 	#s1 -> output pointer
@@ -181,18 +184,35 @@ prepare_filter:
 	#s4 -> whole row in bytes
 	#s5 -> row counter
 	#s6 -> column counter
+	#s7 -> number of blocks
 
+
+
+		
+read_block:
+	li   $v0, 14		#read imgage
+	lw   $a0, 0($sp)	#decsriptor
+	la   $a1, buffer  	#buffer	
+	mulu $a2, $s4, $t2	#size of a block
+
+	syscall
+	
+	#close input file when block reading can't do this
+	#li $v0, 16
+	#syscall
+	
 
 start_filtering:
 #load_first_row:
-    move $a2, $s2 #saving whole first row
-    move $a1, $s1 
-	jal save_row
-	addu $s2, $s2, $s4 #moving pointers
+    move  $a2, $s2 #saving whole first row
+    move  $a1, $s1 
+	jal save_whole_row
+	addu  $s2, $s2, $s4 #moving pointers
 	addiu $s2, $s2, 3
-	addu $s1, $s1, $s4 #forward
+	addu  $s1, $s1, $s4 #forward
 	addiu $s1, $s1, 3
 	li 	  $s5, 1
+	li    $t1, 2
 	
 	lbu $t6, -3($s2) 
 	sb $t6, -3($s1)
@@ -269,23 +289,56 @@ next_row:
 	#li $v0, 32
 	#li $a0, 1000
 #	syscall
-
 	
-	addiu $s5, $s5, 1
+	addiu $s5, $s5, 1  #next overall row
 	
 	addiu $t7, $s3, 6 #two pixels plus row padding
 	move $t5, $zero
-	next_row_loop:
-		beq $t5, $t7, next_image_row #save next two pixels (6 bytes + 1 byte 0?)
+	next_row_loop:	
 		lbu $t6, 0($s2) 
 		sb $t6, 0($s1)
 	
 		addiu $s2, $s2, 1
 		addiu $s1, $s1, 1	
 		addiu $t5, $t5, 1
-	j next_row_loop
+	blt $t5, $t7, next_row_loop #save next two pixels (6 bytes + 1 byte 0?)
 	
-save_row: #arguments $a0 - source buffer adress, $a1, destination buffer adress
+	addiu $t1, $t1, 1  #next row in current block
+	bltu $t1, $t2, next_image_row#-1
+	li $t1, 2
+	
+save_block:
+	subiu $a2, $s2, 3 #change to a0 !!!! #move rows to bottom
+	subu $a2, $a2, $s4
+	la $a1, buffer
+	jal save_whole_row
+	#subiu $a2, $a2, 4 
+	#subiu $a1, $a1, 4
+	jal save_whole_row
+	
+	li   $v0, 14		#read imgage	#load next block
+	lw   $a0, 0($sp)	#decsriptor
+	subiu $a2, $t2, 2
+	mulu $a2, $a2, $s4	#size of a block
+	syscall
+	
+	la $s2, buffer		 #move input pointer to correct place
+	addu  $s2, $s2, $s4
+	addiu $s2, $s2, 3
+	
+
+	li   $v0, 15 	#write to file filtered block
+	lw   $a0, 4($sp)
+	la   $a1, output_buffer
+	subiu $a2, $t2, 1
+	mulu  $a2, $a2, $s4
+	syscall
+	
+	la $s1, output_buffer
+	j next_image_row
+	
+	
+save_whole_row: #arguments $a0 - source buffer adress, $a1, destination buffer adress
 	li $v0, 32
 	li $a0, 1000
 	syscall
@@ -308,7 +361,7 @@ return: jr $ra
 save_result:
 	subiu $a2, $s2, 3 #change to a0 !!!!
 	subiu $a1, $s1, 3
-	jal save_row
+	jal save_whole_row
 
 	li   $v0, 15 	#write to file filtered image
 	lw   $a0, 4($sp)
@@ -322,6 +375,8 @@ exit:
 	lw $a0, 4($sp)	#close output file
 	li $v0, 16
 	syscall 
+	
+	addiu $sp, $sp 24
 	
 	li $v0, 10 		#exit
 	syscall
