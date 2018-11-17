@@ -79,9 +79,9 @@ read_and_save_image_info:
 	move $a2, $s7
 	syscall
 	
-	lw $t0, 8($s1)
-	subiu $t0, $t0, 1
-	sw $t0, 8($s1)
+	#lw $t0, 8($s1)
+	#subiu $t0, $t0, 1
+	#sw $t0, 8($s1)
 
 	li $v0, 15 #write to file second part of a header
 	move $a0, $s5
@@ -90,7 +90,7 @@ read_and_save_image_info:
 	syscall
 	
 	lw $s2, 8($s1) # height
-	addiu $s2, $s2, 1
+	#addiu $s2, $s2, 1
 	sw $s2, 8($sp)
 	lw $s3, 4($s1) # width
 	sw $s3, 12($sp)
@@ -148,11 +148,14 @@ prepare_block_info:
 	mflo $t2 # max rows per block
 	
 	lw $t1, 8($sp) #rows
-	divu $t1, $t2
-	mfhi $t3 #remainder of rows
-	sw $t3, 20($sp)
+	subiu $t4, $t2, 2 #block without up and down borders
 	
-	mflo $s7 #number of blocks
+	divu $t1, $t4
+	mfhi $t3 #remainder of rows
+	bgtz $t3, j_1 #remainder shouldn't be zero
+	move $t3, $t4 	
+j_1:
+	sw $t3, 20($sp)
 
 	
 prepare_filter:
@@ -199,13 +202,15 @@ read_block:
 	li   $v0, 14		#read imgage
 	lw   $a0, 0($sp)	#decsriptor
 	la   $a1, buffer  	#buffer	
-	mulu $a2, $s4, $t2	#size of a block
+	addu $a1, $a1, $s4
+	subiu $a2, $t2, 1
+	mulu $a2, $s4, $a2	#size of a block
 
 	syscall
 	
-	#close input file when block reading can't do this
-	#li $v0, 16
-	#syscall
+	la $a1, buffer
+	addu $a2, $a1, $s4
+	jal save_whole_row
 	
 
 start_filtering:
@@ -217,7 +222,7 @@ start_filtering:
 	addiu $s2, $s2, 3
 #	addu  $s1, $s1, $s4 #forward
 	addiu $s1, $s1, 3
-	li 	  $s5, 1
+	li 	  $s5, 0
 	li    $t1, 2
 	
 save_left_edge:
@@ -295,7 +300,7 @@ save_color:
 next_row:
 	#li $v0, 32
 	#li $a0, 1000
-#	syscall
+	#syscall
 	
 	addiu $s5, $s5, 1  #next overall row
 	
@@ -367,6 +372,7 @@ return: jr $ra
 
 
 save_result:
+
 	subiu $a2, $s2, 3 #change to a0 !!!!
 	subiu $a1, $s1, 3
 	jal save_whole_row
@@ -374,7 +380,8 @@ save_result:
 	li   $v0, 15 	#write to file filtered image
 	lw   $a0, 4($sp)
 	la   $a1, output_buffer
-	lw   $a2, 16($sp)
+	lw   $a2, 20($sp)
+	mulu $a2, $a2, $s4
 	syscall
 	
 	j exit
