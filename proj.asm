@@ -1,8 +1,13 @@
 .data
 input_dir: .asciiz "test6.bmp"
+input_dir_buffer: .space 50
+output_dir_buffer: .space 50
 output_dir: .asciiz "test_result.bmp"
 prompt: .asciiz "\n Starting filtering"
 prompt_end: .asciiz "\n End filtering\n"
+prompt_kernel: .asciiz "\nGive value of kernel nr #: "
+prompt_input_path: .asciiz "\n Please give an input path\n"
+prompt_output_path: .asciiz "\n Please give an output path\n"
 
 		.align 2
 buffer: .space 10000
@@ -17,10 +22,50 @@ kernel:
 
 .text
 main:
-open_files:
+read_input_path:
+	li $v0, 4
+	la $a0, prompt_input_path
+	syscall
+	
+	li $v0, 8
+	la $a0, input_dir_buffer
+	li $a1, 40
+	syscall
+	
+	li $t0, 0
+	la $t1, input_dir_buffer
+delete_end_loop:
+	bge $t0, 40, open_files
+	lbu $t2, 0($t1)
+	addiu $t0, $t0, 1
+	addiu $t1, $t1, 1
+	bgeu $t2, ' ', delete_end_loop
+	sb $zero, -1($t1) 
 
+read_output_path:
+	li $v0, 4
+	la $a0, prompt_output_path
+	syscall
+	
+	li $v0, 8
+	la $a0, output_dir_buffer
+	li $a1, 40
+	syscall
+	
+	li $t0, 0
+	la $t1, output_dir_buffer
+	
+delete_end_loop_output:
+	bge $t0, 40, open_files
+	lbu $t2, 0($t1)
+	addiu $t0, $t0, 1
+	addiu $t1, $t1, 1
+	bgeu $t2, ' ', delete_end_loop_output
+	sb $zero, -1($t1) 	
+	
+open_files:
 	li $v0, 13		  #open file
-	la $a0, input_dir 
+	la $a0, input_dir_buffer 
 	li $a1, 0
 	syscall
 
@@ -29,13 +74,13 @@ open_files:
 	bltz $s0, exit  #couldn't open a file
 	
 	li $v0, 13			#open file
-	la $a0, output_dir 
+	la $a0, output_dir_buffer 
 	li $a1, 9
 	syscall
 
 	move $s5, $v0	#save file descriptor
 	
-	subiu $sp, $sp, 24
+	subiu $sp, $sp, 28
 	sw $s0, 0($sp)
 	sw $s5, 4($sp)
 
@@ -90,29 +135,29 @@ read_and_save_image_info:
 	sw $s7, 16($sp)
 
 prepare_kernel:
-	la $s4, kernel
-	
-    li $t0, 0
-	sb $t0, 0($s4)
-	li $t0, -1
-	sb $t0, 1($s4)
-	li $t0, 0
-	sb $t0, 2($s4)
-	li $t0, -1
-	sb $t0, 3($s4)
-	li $t0, 5
-	sb $t0, 4($s4)
-	li $t0, -1
-	sb $t0, 5($s4)
-	li $t0, 0
-	sb $t0, 6($s4)
-	li $t0, -1
-	sb $t0, 7($s4)
-	li $t0, 0
-	sb $t0, 8($s4)
 
+	la $s4, kernel
+	la $t4, prompt_kernel
+	addiu $t4, $t4, 25
+	li $t3, 1
+read_kernel_loop:
+	addu $t5, $t3, '0'
+	sb $t5, 0($t4)
+	li $v0, 4
+	la $a0, prompt_kernel
+	syscall
+	
+	li $v0, 5
+	syscall
+	sb $v0, 0($s4)
+	
+	addiu $s4, $s4, 1
+	addiu $t3, $t3, 1
+	blt   $t3, 10, read_kernel_loop
+	
+	
 	li $s0, 0 #sum of all kernel values accumulator
-	move $t1, $s4 #kernell adress
+	la $t1, kernel #kernell adress
 	
 	move $t0, $zero #counter
 loop:	
@@ -121,7 +166,6 @@ loop:
 		addiu $t1, $t1, 1
 		addiu $t0, $t0, 1
 		blt   $t0, 9  loop
-	
 	
 #################################################
 #READING IMAGE
@@ -170,6 +214,10 @@ prepare_filter:
 	addi $t8, $t8, -1 #NRows upper edge
 	addi $t9, $t9, -2 #NColumns ignoring edges
 	mulu $t9, $t9, 3
+	
+	subiu $t3, $t2, 2
+	mulu  $t3, $t3, $s4
+	sw    $t3, 24($sp)
 	
 	li $t1, 0
 	#t1 -> row counter in current block
@@ -301,8 +349,7 @@ save_block:
 	
 	li   $v0, 14		#read imgage	#load next block
 	lw   $a0, 0($sp)	#decsriptor
-	subiu $a2, $t2, 2
-	mulu $a2, $a2, $s4	#size of a block
+	lw   $a2, 24($sp)
 	syscall
 	
 	la $s2, buffer		 #move input pointer to correct place
@@ -313,8 +360,6 @@ save_block:
 	li   $v0, 15 	#write to file filtered block
 	lw   $a0, 4($sp)
 	la   $a1, output_buffer
-	subiu $a2, $t2, 2
-	mulu  $a2, $a2, $s4
 	syscall
 	
 	la $s1, output_buffer
